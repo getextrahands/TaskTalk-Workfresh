@@ -2,6 +2,10 @@
   "name": "workfresh-pro",
   "version": "1.0.0",
   "scripts": {
-    "build": "mkdir -p dist && cp index.html dist/"
+    "build": "mkdir -p dist && cp index.html dist/",
+    "start": "npx serve -s dist -l 8080"
+  },
+  "dependencies": {
+    "serve": "^14.2.4"
   }
 }
