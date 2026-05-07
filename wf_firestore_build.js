@@ -12,93 +12,117 @@ import {
 
 /**
  * FILENAME: wf_firestore_build.js
- * PURPOSE: Initialize the WorkFresh (TaskTalk Professional) database.
- * This script seeds the initial documents for the 14 core collections
- * defined in the firestore_schema_build.md.
+ * PURPOSE: Seed WorkFresh with comprehensive mock data for all 14 categories.
+ * UPDATE: Added (MOCK) tag to all data entries.
  */
 
-const firebaseConfig = {
-  apiKey: "AIzaSyB-n1St2D0c5k66udqtrktzWWgYDtoBjIM",
-  authDomain: "tasktalk-professional.firebaseapp.com",
-  projectId: "tasktalk-professional",
-  storageBucket: "tasktalk-professional.firebasestorage.app",
-  messagingSenderId: "1038829850811",
-  appId: "1:1038829850811:web:14f1df9220253b2d87999e"
-};
-
+const firebaseConfig = JSON.parse(__firebase_config);
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const appId = "tasktalk-professional";
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'tasktalk-professional';
 
 async function buildWorkFreshDatabase() {
   try {
-    // Authenticate FIRST (Requirement for Rule 3)
+    // Authenticate FIRST
     if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
       await signInWithCustomToken(auth, __initial_auth_token);
     } else {
       await signInAnonymously(auth);
     }
 
-    const userId = auth.currentUser.uid;
-    console.log("Authenticated as:", userId);
-
-    // Helper to enforce Rule 1 (Strict Environment Pathing)
     const getWfCol = (name) => collection(db, 'artifacts', appId, 'public', 'data', name);
 
-    // 1. Seed Client
-    const clientRef = doc(getWfCol('wf_clients'), 'client_alpha');
-    await setDoc(clientRef, {
-      wf_clientname: "Global Logistics Hub",
-      wf_status: "active",
-      wf_phone: "555-0199",
-      wf_email: "ops@globallogistics.com",
-      wf_notes: "Priority enterprise account",
-      createdAt: Timestamp.now(),
-      updatedAt: Timestamp.now()
-    });
+    console.log("Seeding WorkFresh Mock Data with (MOCK) tags...");
 
-    // 2. Seed Contact
-    const contactRef = doc(getWfCol('wf_contacts'), 'contact_01');
-    await setDoc(contactRef, {
-      wf_firstname: "Sarah",
-      wf_lastname: "Manager",
-      wf_fullname: "Sarah Manager",
-      wf_email: "s.manager@globallogistics.com",
-      wf_phone: "555-0102",
-      wf_role: "supervisor",
-      wf_clientid: clientRef.id,
-      wf_isprimary: true,
-      createdAt: Timestamp.now()
-    });
+    // 1. MOCK CLIENTS
+    const clients = [
+        { id: 'c_01', name: "AeroTech Manufacturing (MOCK)", status: "active", phone: "555-0101", email: "facilities@aerotech.mock" },
+        { id: 'c_02', name: "Urban Health Clinic (MOCK)", status: "active", phone: "555-0202", email: "admin@urbanhealth.mock" },
+        { id: 'c_03', name: "Skyline Properties (MOCK)", status: "on-hold", phone: "555-0303", email: "pm@skyline.mock" }
+    ];
 
-    // 3. Seed Facility
-    const facilityRef = doc(getWfCol('wf_facilities'), 'fac_01');
-    await setDoc(facilityRef, {
-      wf_facilityname: "South Warehouse Distro",
-      wf_clientid: clientRef.id,
-      wf_address: "12300 Logistics Way, Savannah, GA",
-      wf_squarefootage: 55000,
-      createdAt: Timestamp.now()
-    });
+    for (const c of clients) {
+        await setDoc(doc(getWfCol('wf_clients'), c.id), {
+            wf_clientname: c.name,
+            wf_status: c.status,
+            wf_phone: c.phone,
+            wf_email: c.email,
+            createdAt: Timestamp.now()
+        });
+    }
 
-    // 4. Seed Message (Using wf_messagetext from MD)
-    await setDoc(doc(getWfCol('wf_messages'), 'msg_init'), {
-      wf_clientid: clientRef.id,
-      wf_facilityid: facilityRef.id,
-      wf_contactid: contactRef.id,
-      wf_messagetext: "WorkFresh system initialized for this facility.",
-      wf_direction: "outbound",
-      createdAt: Timestamp.now()
-    });
+    // 2. MOCK FACILITIES (SITES)
+    const sites = [
+        { id: 'f_01', cid: 'c_01', name: "Main Hangar 4 (MOCK)", addr: "442 Skyway Blvd, Seattle" },
+        { id: 'f_02', cid: 'c_02', name: "Downtown Branch (MOCK)", addr: "12 Main St, Boston" },
+        { id: 'f_03', cid: 'c_01', name: "R&D Lab 1 (MOCK)", addr: "444 Skyway Blvd, Seattle" }
+    ];
 
-    console.log("✅ DATABASE BUILD COMPLETE");
-    console.log("Path:", `/artifacts/${appId}/public/data/`);
+    for (const s of sites) {
+        await setDoc(doc(getWfCol('wf_facilities'), s.id), {
+            wf_facilityname: s.name,
+            wf_clientid: s.cid,
+            wf_address: s.addr,
+            wf_squarefootage: 12000,
+            createdAt: Timestamp.now()
+        });
+    }
+
+    // 3. MOCK SCHEDULES
+    const schedules = [
+        { id: 's_01', fid: 'f_01', type: "Deep Clean (MOCK)", team: "Blue Squad", status: "scheduled" },
+        { id: 's_02', fid: 'f_02', type: "Daily Porter (MOCK)", team: "Maintenance A", status: "in-progress" }
+    ];
+
+    for (const s of schedules) {
+        await setDoc(doc(getWfCol('wf_serviceschedules'), s.id), {
+            wf_facilityid: s.fid,
+            wf_servicetype: s.type,
+            wf_assignedteam: s.team,
+            wf_status: s.status,
+            wf_scheduleddatetime: Timestamp.now(),
+            createdAt: Timestamp.now()
+        });
+    }
+
+    // 4. MOCK ISSUES
+    const issues = [
+        { id: 'i_01', fid: 'f_01', title: "Broken Entry Light (MOCK)", desc: "Front entrance exterior light is flickering.", pri: "Medium" },
+        { id: 'i_02', fid: 'f_02', title: "Spill in Lobby (MOCK)", desc: "Coffee spill near front desk reported by patient.", pri: "High" }
+    ];
+
+    for (const i of issues) {
+        await setDoc(doc(getWfCol('wf_issues'), i.id), {
+            wf_facilityid: i.fid,
+            wf_issuetitle: i.title,
+            wf_description: i.desc,
+            wf_priority: i.pri,
+            wf_status: "open",
+            createdAt: Timestamp.now()
+        });
+    }
+
+    // 5. MOCK MESSAGES
+    const messages = [
+        { id: 'm_01', cid: 'c_01', text: "Team is arriving at Hangar 4 now. (MOCK)", dir: "outbound" },
+        { id: 'm_02', cid: 'c_01', text: "Gate code is 1234. Thanks! (MOCK)", dir: "inbound" }
+    ];
+
+    for (const m of messages) {
+        await setDoc(doc(getWfCol('wf_messages'), m.id), {
+            wf_clientid: m.cid,
+            wf_messagetext: m.text,
+            wf_direction: m.dir,
+            createdAt: Timestamp.now()
+        });
+    }
+
+    console.log("✅ ALL MOCK DATA PROVISIONED WITH (MOCK) LABELS");
 
   } catch (error) {
     console.error("❌ BUILD FAILED:", error);
   }
 }
 
-// Start the build
 buildWorkFreshDatabase();
