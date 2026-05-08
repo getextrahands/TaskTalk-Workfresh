@@ -2,526 +2,324 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>WorkFresh Business OS</title>
+    
+    <!-- PWA / Mobile Meta Tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="WorkFresh">
+    <meta name="theme-color" content="#f8fafc">
+    
+    <!-- App Icons -->
+    <link rel="icon" type="image/png" href="https://res.cloudinary.com/dwmsgnm4p/image/upload/q_auto/f_auto/v1778012864/w_lou9fx.png">
+    <link rel="apple-touch-icon" href="https://res.cloudinary.com/dwmsgnm4p/image/upload/q_auto/f_auto/v1778012864/w_lou9fx.png">
+
+    <!-- Tailwind & Icons -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, onAuthStateChanged, signInWithCustomToken, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, onSnapshot, query, doc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyB-n1St2D0c5k66udqtrktzWWgYDtoBjIM",
+            authDomain: "tasktalk-professional.firebaseapp.com",
+            projectId: "tasktalk-professional",
+            storageBucket: "tasktalk-professional.firebasestorage.app",
+            messagingSenderId: "1038829850811",
+            appId: "1:1038829850811:web:14f1df9220253b2d87999e"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        
+        // Finalized App ID for WorkFresh v2
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'workfresh-v2';
+
+        window.db = db;
+        window.appId = appId;
+        
+        // Local state mapped to the 17-table schema
+        const state = {
+            view: 'home',
+            subView: 'list',
+            detailTab: 'contacts',
+            hubTab: 'threads',
+            selectedId: null,
+            // 17-Table Master Collections
+            companies: [],
+            facilities: [],
+            facilityContacts: [],
+            billingProfiles: [],
+            staff: [],
+            sow: [],
+            sowTasks: [],
+            serviceSchedules: [],
+            serviceLogs: [],
+            serviceTasks: [],
+            tasks: [],
+            taskUpdates: [],
+            issues: [],
+            issueUpdates: [],
+            messages: [],
+            callLogs: [],
+            documents: [],
+            isSyncing: true
+        };
+        window.state = state;
+
+        async function initSync() {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    try { await signInWithCustomToken(auth, __initial_auth_token); } 
+                    catch (e) { await signInAnonymously(auth); }
+                } else {
+                    await signInAnonymously(auth);
+                }
+                onAuthStateChanged(auth, (user) => { if (user) setupLiveListeners(); });
+            } catch (err) { console.error("Auth failed:", err); }
+        }
+
+        function setupLiveListeners() {
+            const collections = [
+                'companies', 'facilities', 'facilityContacts', 'billingProfiles', 
+                'staff', 'sow', 'sowTasks', 'serviceSchedules', 'serviceLogs', 
+                'serviceTasks', 'tasks', 'taskUpdates', 'issues', 'issueUpdates', 
+                'messages', 'callLogs', 'documents'
+            ];
+            
+            let loaded = 0;
+            collections.forEach(colName => {
+                const colRef = collection(db, 'artifacts', appId, 'public', 'data', colName);
+                onSnapshot(colRef, (snapshot) => {
+                    state[colName] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    loaded++;
+                    if (loaded >= collections.length) state.isSyncing = false;
+                    render();
+                }, (error) => {
+                    console.error(`Sync error [${colName}]:`, error);
+                });
+            });
+        }
+        window.initSync = initSync;
+    </script>
+
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
-        
-        :root {
-            --primary-blue: #2563eb;
-            --bg-main: #f8fafc;
-            --card-bg: #ffffff;
-            --text-main: #0f172a;
-            --text-muted: #64748b;
-        }
-
-        body { 
-            font-family: 'Inter', sans-serif; 
-            background-color: #0f172a; 
-            margin: 0; padding: 0; 
-            display: flex; align-items: center; justify-content: center; 
-            min-height: 100vh; 
-        }
-        
-        .device-container {
-            width: 390px;
-            height: 844px;
-            background: #000;
-            border-radius: 55px;
-            border: 10px solid #1a1a1a;
-            position: relative;
-            box-shadow: 0 50px 100px -20px rgba(0,0,0,0.6);
-            overflow: hidden;
-        }
-
-        .screen {
-            width: 100%;
-            height: 100%;
-            background: var(--bg-main);
-            border-radius: 45px;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            position: relative;
-        }
-
-        .notch {
-            width: 130px;
-            height: 30px;
-            background: #000;
-            position: absolute;
-            top: 0;
-            left: 50%;
-            transform: translateX(-50%);
-            border-bottom-left-radius: 18px;
-            border-bottom-right-radius: 18px;
-            z-index: 100;
-        }
-
-        .tab-container {
-            background: #f1f5f9;
-            padding: 4px;
-            border-radius: 20px;
-            display: flex;
-            gap: 4px;
-        }
-
-        .tab-btn {
-            flex: 1;
-            padding: 10px 4px;
-            border-radius: 16px;
-            font-size: 8px;
-            font-weight: 800;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            color: #94a3b8;
-            transition: all 0.2s;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 4px;
-        }
-
-        .tab-btn.active {
-            background: #fff;
-            color: #0f172a;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-        }
-
-        .list-card {
-            background: #fff;
-            border-radius: 32px;
-            padding: 20px;
-            margin-bottom: 12px;
-            border: 1px solid rgba(0,0,0,0.03);
-            display: flex;
-            align-items: center;
-            gap: 16px;
-        }
-
-        .profile-image-large {
-            width: 100px;
-            height: 100px;
-            border-radius: 28px;
-            object-fit: cover;
-            border: 4px solid #fff;
-            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1);
-        }
-
-        .status-pill {
-            font-size: 9px;
-            font-weight: 900;
-            padding: 4px 12px;
-            border-radius: 10px;
-            text-transform: uppercase;
-        }
-
+        :root { --primary-blue: #2563eb; --bg-main: #f8fafc; }
+        body { font-family: 'Inter', sans-serif; background-color: var(--bg-main); margin: 0; padding: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh; position: fixed; width: 100%; height: 100%; overflow: hidden; }
+        .device-container { width: 100%; max-width: 450px; height: 100vh; background: transparent; position: relative; overflow: hidden; }
+        .screen { width: 100%; height: 100%; background: var(--bg-main); display: flex; flex-direction: column; overflow: hidden; position: relative; }
+        .tab-container { background: #f1f5f9; padding: 4px; border-radius: 20px; display: flex; gap: 4px; }
+        .tab-btn { flex: 1; padding: 10px 4px; border-radius: 16px; font-size: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; transition: all 0.2s; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+        .tab-btn.active { background: #fff; color: #0f172a; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .list-card { background: #fff; border-radius: 32px; padding: 18px; margin-bottom: 12px; border: 1px solid rgba(0,0,0,0.03); display: flex; align-items: center; gap: 16px; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.02); }
+        .profile-image-large { width: 110px; height: 110px; border-radius: 32px; object-fit: cover; border: 4px solid #fff; box-shadow: 0 15px 35px rgba(0,0,0,0.12); }
+        .status-pill { font-size: 10px; font-weight: 900; padding: 5px 14px; border-radius: 12px; text-transform: uppercase; }
         .active-pill { background: #dcfce7; color: #15803d; }
         .net-pill { background: #dbeafe; color: #1d4ed8; }
-
         .hide-scroll::-webkit-scrollbar { display: none; }
         .fade-in { animation: fadeIn 0.3s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-
-        .dash-icon-btn {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 8px;
-        }
-        .dash-icon-box {
-            width: 64px;
-            height: 64px;
-            border-radius: 22px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 10px 20px -5px rgba(0,0,0,0.1);
-        }
-
-        .glass-nav {
-            background: rgba(255, 255, 255, 0.85);
-            backdrop-filter: blur(20px);
-            border-top: 1px solid rgba(0,0,0,0.05);
-        }
-
-        .chat-bubble {
-            max-width: 80%;
-            padding: 12px 16px;
-            border-radius: 20px;
-            font-size: 13px;
-            line-height: 1.4;
-        }
+        .dash-icon-box { width: 64px; height: 64px; border-radius: 22px; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 20px 5px rgba(0,0,0,0.1); flex-shrink: 0; }
+        .glass-nav { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(20px); border-top: 1px solid rgba(0,0,0,0.05); }
+        .chat-bubble { max-width: 80%; padding: 14px 18px; border-radius: 24px; font-size: 14px; line-height: 1.4; }
         .chat-left { background: #f1f5f9; color: #1e293b; border-bottom-left-radius: 4px; }
         .chat-right { background: #2563eb; color: #fff; border-bottom-right-radius: 4px; align-self: flex-end; }
+        .timeline-line { position: absolute; left: 24px; top: 0; bottom: 0; width: 1px; background: #f1f5f9; z-index: 0; }
     </style>
 </head>
 <body>
 
-    <div class="device-container">
-        <div class="screen">
-            <div class="notch"></div>
-            
-            <div id="content" class="flex-1 overflow-y-auto hide-scroll pb-24"></div>
-
-            <!-- Bottom Nav -->
-            <div class="absolute bottom-0 left-0 right-0 h-24 glass-nav flex justify-around items-center px-6 pb-6">
-                <button onclick="navigate('home')" id="nav-home" class="p-3 transition-all"><i data-lucide="layout-grid" class="w-6 h-6"></i></button>
-                <button onclick="navigate('companies')" id="nav-companies" class="p-3 transition-all"><i data-lucide="briefcase" class="w-6 h-6"></i></button>
-                <button onclick="navigate('facilities')" id="nav-facilities" class="p-3 transition-all"><i data-lucide="map-pin" class="w-6 h-6"></i></button>
-                <button onclick="navigate('contacts')" id="nav-contacts" class="p-3 transition-all"><i data-lucide="users" class="w-6 h-6"></i></button>
-            </div>
-
-            <div class="absolute bottom-2 left-1/2 -translate-x-1/2 w-32 h-1.5 bg-slate-200 rounded-full"></div>
+<div class="device-container">
+    <div class="screen">
+        <div id="content" class="flex-1 overflow-y-auto hide-scroll pb-24"></div>
+        <div class="absolute bottom-0 left-0 right-0 h-24 glass-nav flex justify-around items-center px-6 pb-6">
+            <button onclick="navigate('home')" id="nav-home" class="p-3 transition-all"><i data-lucide="layout-grid" class="w-6 h-6"></i></button>
+            <button onclick="navigate('companies')" id="nav-companies" class="p-3 transition-all"><i data-lucide="briefcase" class="w-6 h-6"></i></button>
+            <button onclick="navigate('facilities')" id="nav-facilities" class="p-3 transition-all"><i data-lucide="map-pin" class="w-6 h-6"></i></button>
+            <button onclick="navigate('contacts')" id="nav-contacts" class="p-3 transition-all"><i data-lucide="users" class="w-6 h-6"></i></button>
         </div>
     </div>
+</div>
 
-    <script>
-        const state = {
-            view: 'home',
-            subView: 'list', 
-            detailTab: 'overview',
-            selectedId: null,
-            companies: [
-                { id: 'c1', name: 'Riverside Construction', code: 'C-222-481', status: 'ACTIVE', terms: 'NET 10', image: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&q=80&w=200' },
-                { id: 'c2', name: 'Global Logistics', code: 'C-445-092', status: 'ACTIVE', terms: 'NET 30', image: 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&q=80&w=200' },
-                { id: 'c3', name: 'Bayside Medical', code: 'C-101-554', status: 'ACTIVE', terms: 'NET 36', image: 'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&q=80&w=200' }
-            ],
-            contacts: [
-                { id: 'con1', name: 'John Rivers', email: 'john@riverside.com', mobile: '555-0101', work: '555-9000', roles: ['PRIMARY', 'ACCOUNTING'], image: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=200', notes: "Prefers updates via email. Always double check PO numbers." },
-                { id: 'con2', name: 'Alice Meyers', email: 'alice@riverside.com', mobile: '555-0102', work: '555-9001', roles: ['TEMPORARY'], image: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=200', notes: "Assisting with West Side Yard project." }
-            ],
-            facilities: [
-                { id: 'f1', name: 'West Side Yard', code: 'FAC-001', address: '123 Industrial Way, Oakland', status: 'ACTIVE', image: 'https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&q=80&w=200' },
-                { id: 'f2', name: 'Pier 45 Terminal', code: 'FAC-092', address: 'Pier 45, San Francisco', status: 'ACTIVE', image: 'https://images.unsplash.com/photo-1590496793907-2952702220ff?auto=format&fit=crop&q=80&w=200' }
-            ],
-            messages: [
-                { from: 'John Rivers', text: 'Hello, I’m following up on the latest invoice for the West Side Yard project.', time: '10:04 AM', dir: 'left' },
-                { from: 'Me', text: 'Acknowledged. I will check with accounting and get back to you by EOD.', time: '10:15 AM', dir: 'right' }
-            ],
-            calls: [
-                { type: 'Inbound Inquiry', date: 'May 5, 2024', detail: 'Called for update on Oakland Site' },
-                { type: 'Invoice Dispute', date: 'Apr 28, 2024', detail: 'Requested a possible credit on last month bill' }
-            ],
-            staff: [
-                { name: 'Sarah Connor', role: 'Field Tech', status: 'Onsite', location: 'West Side Yard' },
-                { name: 'Dave Miller', role: 'Supervisor', status: 'Available', location: 'HQ' }
-            ]
-        };
+<script>
+function navigate(view, id = null, sub = 'list') {
+    state.view = view; state.selectedId = id; state.subView = sub;
+    if (view === 'companies' && sub === 'detail') state.detailTab = 'contacts';
+    if (view === 'profile-hub') state.hubTab = 'threads';
+    render();
+}
 
-        function navigate(view, id = null, sub = 'list') {
-            state.view = view;
-            state.selectedId = id;
-            state.subView = sub;
-            state.detailTab = 'overview';
-            if (view === 'companies') state.detailTab = 'contacts';
-            render();
-        }
+function setDetailTab(tab) { state.detailTab = tab; render(); }
+function setHubTab(tab) { state.hubTab = tab; render(); }
 
-        function setDetailTab(tab) {
-            state.detailTab = tab;
-            render();
-        }
+function render() {
+    const content = document.getElementById('content');
+    if (!content) return;
+    content.className = "flex-1 overflow-y-auto hide-scroll pb-24 fade-in";
 
-        function render() {
-            const content = document.getElementById('content');
-            content.className = "flex-1 overflow-y-auto hide-scroll pb-24 fade-in";
-            
-            document.querySelectorAll('button[id^="nav-"]').forEach(btn => {
-                btn.classList.remove('text-slate-900', 'scale-110');
-                btn.classList.add('text-slate-300');
-            });
-            const activeNav = document.getElementById(`nav-${state.view}`);
-            if(activeNav) {
-                activeNav.classList.remove('text-slate-300');
-                activeNav.classList.add('text-slate-900', 'scale-110');
-            }
+    document.querySelectorAll('button[id^="nav-"]').forEach(btn => {
+        btn.classList.remove('text-slate-900', 'scale-110');
+        btn.classList.add('text-slate-300');
+    });
 
-            switch(state.view) {
-                case 'home': renderDashboard(content); break;
-                case 'companies': renderList(content, 'Companies', state.companies); break;
-                case 'facilities': renderList(content, 'Facilities', state.facilities); break;
-                case 'contacts': renderList(content, 'Contacts', state.contacts); break;
-                case 'profile-hub': renderProfileHub(content, state.selectedId); break;
-                case 'calendar': renderCalendar(content); break;
-                case 'staff': renderStaff(content); break;
-                case 'logs': renderLogs(content); break;
-                case 'comms': renderComms(content); break;
-            }
-            
-            lucide.createIcons();
-        }
+    const activeNav = document.getElementById(`nav-${state.view === 'dash' ? 'home' : (state.view === 'facilityContacts' ? 'contacts' : state.view)}`);
+    if(activeNav) {
+        activeNav.classList.remove('text-slate-300');
+        activeNav.classList.add('text-slate-900', 'scale-110');
+    }
 
-        function renderDashboard(content) {
-            content.innerHTML = `
-                <div class="px-8 pt-16 pb-8">
-                    <div class="mb-10">
-                        <h1 class="text-6xl font-black text-slate-900 tracking-tighter">09:41</h1>
-                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mt-1">Thursday, May 7</p>
+    switch(state.view) {
+        case 'home': renderConsole(content); break;
+        case 'dash': renderDash(content); break;
+        case 'companies': renderList(content, 'Companies', state.companies, 'company'); break;
+        case 'facilities': renderList(content, 'Facilities', state.facilities, 'facility'); break;
+        case 'contacts': renderList(content, 'Contacts', state.facilityContacts, 'facilityContact'); break;
+        case 'profile-hub': renderProfileHub(content, state.selectedId); break;
+    }
+    lucide.createIcons();
+}
+
+function renderConsole(content) {
+    content.innerHTML = `
+        <div class="px-8 pt-16 pb-8">
+            <div class="mb-12 text-center">
+                <p class="text-[11px] font-black text-slate-400 uppercase tracking-[0.4em]">Thursday, May 7</p>
+                ${state.isSyncing ? `<p class="text-[8px] text-blue-500 font-black mt-2 animate-pulse tracking-widest">FIREBASE MASTER SYNC ACTIVE</p>` : ''}
+            </div>
+            <div class="grid grid-cols-3 gap-y-12 gap-x-4">
+                ${renderDashItem('Dash', 'bg-indigo-500', 'layout-grid', 'dash')}
+                ${renderDashItem('Companies', 'bg-blue-600', 'briefcase', 'companies')}
+                ${renderDashItem('Facilities', 'bg-emerald-500', 'map-pin', 'facilities')}
+                ${renderDashItem('Contacts', 'bg-violet-600', 'users', 'contacts')}
+                ${renderDashItem('Staff', 'bg-slate-700', 'shield-check', 'home')}
+                ${renderDashItem('Comms', 'bg-sky-500', 'message-square', 'home')}
+                ${renderDashItem('Logs', 'bg-rose-500', 'activity', 'home')}
+                ${renderDashItem('SOW', 'bg-indigo-600', 'file-text', 'home')}
+                ${renderDashItem('Issues', 'bg-orange-500', 'alert-circle', 'home')}
+            </div>
+        </div>
+    `;
+}
+
+function renderDashItem(label, color, icon, target) {
+    return `<button onclick="navigate('${target}')" class="flex flex-col items-center group active:scale-95 transition-all"><div class="dash-icon-box ${color} text-white mb-2"><i data-lucide="${icon}" style="width: 28px; height: 28px;"></i></div><span class="text-[9px] font-black text-slate-400 uppercase tracking-widest text-center leading-tight max-w-[80px]">${label}</span></button>`;
+}
+
+function renderList(content, title, items, prefix) {
+    if (state.subView === 'detail' && state.selectedId) {
+        const item = items.find(i => i.id === state.selectedId);
+        return item ? renderDetail(content, item, title, prefix) : navigate(state.view);
+    }
+    content.innerHTML = `
+        <div class="px-6 pt-14 pb-6 bg-white border-b border-slate-50 sticky top-0 z-20">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-black text-slate-900 tracking-tight">${title}</h2>
+                <button class="w-10 h-10 bg-slate-50 rounded-full flex items-center justify-center text-slate-900 flex-shrink-0"><i data-lucide="plus" class="w-5 h-5"></i></button>
+            </div>
+            <div class="relative"><i data-lucide="search" class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 w-4 h-4"></i><input class="w-full bg-slate-50 border-none rounded-2xl py-3.5 pl-11 text-xs font-bold" placeholder="Search ${title}..."></div>
+        </div>
+        <div class="p-6">
+            ${items.length > 0 ? items.map(item => `
+                <div onclick="navigate('${state.view}', '${item.id}', 'detail')" class="list-card">
+                    <img src="${item[prefix + '_imageUrl'] || item[prefix + '_logoUrl'] || 'https://via.placeholder.com/200'}" class="w-14 h-14 rounded-2xl object-cover flex-shrink-0">
+                    <div class="flex-1 min-w-0">
+                        <h4 class="font-bold text-slate-900 truncate">${item[prefix + '_companyName'] || item[prefix + '_facilityName'] || item[prefix + '_fullName']}</h4>
+                        <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5 truncate">${item[prefix + '_companyId'] || item[prefix + '_facilityId'] || item[prefix + '_email'] || ''}</p>
                     </div>
-                    
-                    <div class="grid grid-cols-3 gap-y-12 gap-x-4">
-                        ${renderDashItem('Dash', 'bg-indigo-500', 'layout-grid', 'home')}
-                        ${renderDashItem('Companies', 'bg-blue-600', 'briefcase', 'companies')}
-                        ${renderDashItem('Facilities', 'bg-emerald-500', 'map-pin', 'facilities')}
-                        ${renderDashItem('Contacts', 'bg-violet-600', 'users', 'contacts')}
-                        ${renderDashItem('Calendar', 'bg-indigo-600', 'calendar', 'calendar')}
-                        ${renderDashItem('Logs', 'bg-rose-500', 'activity', 'logs')}
-                        ${renderDashItem('Dialer', 'bg-emerald-600', 'phone-forwarded', 'profile-hub')}
-                        ${renderDashItem('Comms', 'bg-sky-500', 'message-square', 'comms')}
-                        ${renderDashItem('Staff', 'bg-slate-700', 'shield-check', 'staff')}
-                    </div>
+                    <i data-lucide="chevron-right" class="text-slate-200 w-5 h-5 flex-shrink-0"></i>
+                </div>
+            `).join('') : `<div class="text-center py-20 text-slate-300 font-medium">No records synced in ${title}.</div>`}
+        </div>
+    `;
+}
 
-                    <div class="mt-12 space-y-4">
-                        <h4 class="text-[10px] font-black text-slate-300 uppercase tracking-widest px-1">Active Now</h4>
-                        <div class="bg-white p-6 rounded-[2.5rem] border border-slate-100 flex items-center gap-4">
-                            <div class="w-10 h-10 bg-emerald-50 text-emerald-500 rounded-xl flex items-center justify-center"><i data-lucide="check" class="w-5 h-5"></i></div>
-                            <div>
-                                <p class="text-xs font-bold text-slate-900">Cleaning Completed</p>
-                                <p class="text-[10px] text-slate-400 font-medium">West Side Yard • 12 mins ago</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
+function renderDetail(content, item, type, prefix) {
+    const isCompany = type === 'Companies';
+    const name = item[prefix + '_companyName'] || item[prefix + '_facilityName'] || item[prefix + '_fullName'];
+    const sub = item[prefix + '_companyId'] || item[prefix + '_facilityId'] || '';
+    const img = item[prefix + '_imageUrl'] || item[prefix + '_logoUrl'] || 'https://via.placeholder.com/200';
+    const status = item[prefix + '_companyStatus'] || item[prefix + '_facilityStatus'] || item[prefix + '_status'] || 'ACTIVE';
 
-        function renderDashItem(label, color, icon, target) {
-            return `
-                <button onclick="navigate('${target}')" class="dash-icon-btn active:scale-90 transition-transform">
-                    <div class="dash-icon-box ${color} text-white">
-                        <i data-lucide="${icon}" class="w-7 h-7"></i>
-                    </div>
-                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest text-center">${label}</span>
-                </button>
-            `;
-        }
+    content.innerHTML = `
+        <div class="px-6 pt-12 pb-6 bg-white border-b border-slate-50">
+            <div class="flex justify-between items-center mb-10">
+                <button onclick="navigate('${state.view}')" class="w-10 h-10 bg-slate-50 rounded-full flex items-center justify-center text-slate-600 flex-shrink-0"><i data-lucide="arrow-left" class="w-5 h-5"></i></button>
+                <div class="text-center px-4 min-w-0"><h2 class="text-lg font-black text-slate-900 truncate">${name}</h2><p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest truncate">${sub}</p></div>
+                <button class="w-10 h-10 flex items-center justify-center text-slate-300 flex-shrink-0"><i data-lucide="more-vertical" class="w-5 h-5"></i></button>
+            </div>
+            <div class="flex flex-col items-center mb-8"><img src="${img}" class="profile-image-large mb-5"><div class="flex gap-2"><span class="status-pill active-pill">${status}</span><span class="status-pill net-pill">SYNCED</span></div></div>
+            <div class="tab-container mt-6"><button onclick="setDetailTab('contacts')" class="tab-btn ${state.detailTab === 'contacts'? 'active': ''}">Contacts</button><button onclick="setDetailTab('addresses')" class="tab-btn ${state.detailTab === 'addresses' ? 'active' : ''}">Addresses</button><button onclick="setDetailTab('details')" class="tab-btn ${state.detailTab === 'details' ? 'active' : ''}">Details</button></div>
+        </div>
+        <div class="p-6">
+            ${state.detailTab === 'contacts' ? `
+                <div class="space-y-3">
+                    ${state.facilityContacts.map(c => `<div onclick="navigate('profile-hub', '${c.id}')" class="list-card border-none shadow-sm"><img src="${c.facilityContact_imageUrl || 'https://via.placeholder.com/200'}" class="w-12 h-12 rounded-xl object-cover flex-shrink-0"><div class="flex-1 min-w-0"><h4 class="font-bold text-slate-900 text-sm truncate">${c.facilityContact_fullName}</h4><p class="text-[9px] font-black text-blue-600 uppercase mt-0.5 truncate">${c.facilityContact_type}</p></div><i data-lucide="chevron-right" class="text-slate-200 w-4 h-4 flex-shrink-0"></i></div>`).join('')}
+                    <div class="border-2 border-dashed border-slate-100 rounded-3xl p-5 flex items-center justify-center gap-2 cursor-pointer mt-4 active:bg-slate-50 transition-colors"><i data-lucide="plus" class="w-4 h-4 text-slate-300"></i><span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Add Contact</span></div>
+                </div>
+            ` : '<div class="text-center py-20 text-slate-300 font-medium">Record synced. Detail data loading...</div>'}
+        </div>
+    `;
+}
 
-        function renderList(content, title, items) {
-            if (state.subView === 'detail' && state.selectedId) {
-                const item = items.find(i => i.id === state.selectedId);
-                return renderDetail(content, item, title);
-            }
+function renderProfileHub(content, contactId) {
+    const contact = state.facilityContacts.find(c => c.id === contactId) || state.facilityContacts[0];
+    if (!contact) return navigate('contacts');
+    content.innerHTML = `
+        <div class="px-6 pt-12 pb-4 bg-white border-b border-slate-50">
+            <div class="flex justify-between items-center mb-8"><button onclick="navigate('contacts')" class="w-10 h-10 bg-slate-50 rounded-full flex items-center justify-center text-slate-600 flex-shrink-0"><i data-lucide="arrow-left" class="w-5 h-5"></i></button><div class="w-10"></div></div>
+            <div class="flex flex-col items-center mb-6"><img src="${contact.facilityContact_imageUrl || 'https://via.placeholder.com/200'}" class="w-24 h-24 rounded-[2rem] object-cover mb-4 shadow-xl"><p class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 truncate max-w-full">${contact.facilityContact_email}</p></div>
+            <div class="tab-container !rounded-[24px] !p-1.5 mb-2">${renderHubTab('Threads', 'hash', 'threads')}${renderHubTab('Messaging', 'message-square', 'messages')}${renderHubTab('Profile', 'phone', 'profile')}${renderHubTab('History', 'clock', 'history')}</div>
+        </div>
+        <div class="p-6 relative">
+            ${state.hubTab === 'threads' ? `
+                <div class="timeline-line"></div><div class="space-y-8 relative z-10">
+                ${state.callLogs.length > 0 ? state.callLogs.map((call, idx) => `<div class="flex gap-4"><div class="w-4 h-4 flex-shrink-0 rounded-full bg-white border-4 ${idx === 0 ? 'border-blue-500' : 'border-slate-200'} mt-1 relative z-10"></div><div class="flex-1 bg-white p-6 rounded-[2rem] shadow-sm border border-slate-50 min-w-0"><div class="flex justify-between items-start mb-3"><span class="text-[9px] font-black text-slate-400 uppercase tracking-widest truncate">${call.callLog_type}</span><span class="text-[10px] font-bold text-slate-400 whitespace-nowrap">2h ago</span></div><h4 class="text-base font-black text-slate-900 mb-1 truncate">${call.callLog_direction}</h4><p class="text-xs text-slate-500 leading-relaxed">${call.callLog_notes || 'Call recorded.'}</p></div></div>`).join('') : '<p class="text-center text-slate-300 py-10">No threads found.</p>'}
+                </div>
+            ` : state.hubTab === 'messages' ? `
+                <div class="flex flex-col gap-5 mb-24">${state.messages.map(m => `<div class="chat-bubble ${m.message_direction === 'inbound' ? 'chat-left': 'chat-right shadow-md'}">${m.message_text}</div>`).join('')}</div>
+                <div class="absolute bottom-6 left-6 right-6 flex gap-3"><div class="flex-1 bg-white border border-slate-100 rounded-3xl px-6 flex items-center shadow-sm"><input type="text" placeholder="Type a message..." class="w-full py-4 text-sm font-medium border-none focus:outline-none bg-transparent"></div><button class="w-14 h-14 bg-slate-900 text-white rounded-2xl flex items-center justify-center shadow-lg flex-shrink-0"><i data-lucide="send" class="w-5 h-5"></i></button></div>
+            ` : state.hubTab === 'profile' ? `
+                <div class="space-y-4">
+                    <div class="bg-white p-6 rounded-[2.5rem] border border-slate-50 shadow-sm flex items-center gap-6"><div class="w-14 h-14 bg-slate-50 text-slate-400 rounded-2xl flex items-center justify-center flex-shrink-0"><i data-lucide="smartphone" style="width: 28px; height: 28px;"></i></div><div class="flex-1 min-w-0"><span class="text-[8px] font-black text-slate-400 uppercase tracking-widest">Mobile</span><p class="text-lg font-black text-slate-900 truncate">${contact.facilityContact_phone || 'N/A'}</p></div><button class="w-12 h-12 bg-emerald-500 text-white rounded-2xl flex items-center justify-center flex-shrink-0"><i data-lucide="phone" class="w-5 h-5"></i></button></div>
+                    <div class="bg-white p-8 rounded-[2.5rem] border border-slate-50 shadow-sm mt-4"><h4 class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">Internal Client Notes</h4><p class="text-sm text-slate-600 leading-relaxed font-medium">${contact.facilityContact_notes || 'No notes available.'}</p></div>
+                </div>
+            ` : '<div class="text-center py-20 text-slate-300 font-medium">History empty.</div>'}
+        </div>
+    `;
+}
 
-            content.innerHTML = `
-                <div class="px-6 pt-14 pb-6 bg-white border-b border-slate-50 sticky top-0 z-20">
-                    <div class="flex justify-between items-center mb-6">
-                        <h2 class="text-2xl font-black text-slate-900 tracking-tight">${title}</h2>
-                        <button class="w-10 h-10 bg-slate-50 rounded-full flex items-center justify-center text-slate-900"><i data-lucide="plus" class="w-5 h-5"></i></button>
-                    </div>
-                    <div class="relative">
-                        <i data-lucide="search" class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 w-4 h-4"></i>
-                        <input class="w-full bg-slate-50 border-none rounded-2xl py-3.5 pl-11 text-xs font-bold" placeholder="Search...">
-                    </div>
-                </div>
-                <div class="p-6">
-                    ${items.map(item => `
-                        <div onclick="navigate('${state.view}', '${item.id}', 'detail')" class="list-card">
-                            <img src="${item.image}" class="w-14 h-14 rounded-2xl object-cover">
-                            <div class="flex-1">
-                                <h4 class="font-bold text-slate-900">${item.name}</h4>
-                                <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-0.5">${item.code || item.email}</p>
-                            </div>
-                            <i data-lucide="chevron-right" class="text-slate-200 w-5 h-5"></i>
-                        </div>
-                    `).join('')}
-                </div>
-            `;
-        }
+function renderHubTab(label, icon, key) { return `<button onclick="setHubTab('${key}')" class="tab-btn ${state.hubTab === key ? 'active': ''}"><i data-lucide="${icon}" style="width: 18px; height: 18px;"></i><span class="mt-0.5">${label}</span></button>`; }
 
-        function renderDetail(content, item, type) {
-            const isCompany = type === 'Companies';
-            content.innerHTML = `
-                <div class="px-6 pt-14 pb-6 bg-white border-b border-slate-50">
-                    <div class="flex justify-between items-center mb-8">
-                        <button onclick="navigate('${state.view}')" class="w-10 h-10 bg-slate-50 rounded-full flex items-center justify-center text-slate-400"><i data-lucide="arrow-left" class="w-5 h-5"></i></button>
-                        <h2 class="text-lg font-extrabold text-slate-900">${item.name}</h2>
-                        <div class="w-10"></div>
-                    </div>
-                    <div class="flex flex-col items-center mb-8">
-                        <img src="${item.image}" class="profile-image-large mb-4">
-                        <div class="flex gap-2">
-                            <span class="status-pill active-pill">${item.status}</span>
-                            ${item.terms ? `<span class="status-pill net-pill">${item.terms}</span>` : ''}
-                        </div>
-                    </div>
-                    <div class="tab-container">
-                        ${isCompany ? `
-                            <button onclick="setDetailTab('contacts')" class="tab-btn ${state.detailTab === 'contacts' ? 'active' : ''}">Contacts</button>
-                            <button onclick="setDetailTab('addresses')" class="tab-btn ${state.detailTab === 'addresses' ? 'active' : ''}">Addresses</button>
-                            <button onclick="setDetailTab('history')" class="tab-btn ${state.detailTab === 'history' ? 'active' : ''}">Details</button>
-                        ` : `
-                            <button onclick="setDetailTab('overview')" class="tab-btn ${state.detailTab === 'overview' ? 'active' : ''}">Overview</button>
-                            <button onclick="setDetailTab('history')" class="tab-btn ${state.detailTab === 'history' ? 'active' : ''}">Logs</button>
-                        `}
-                    </div>
+function renderDash(content) {
+    const latestLog = state.serviceLogs[0] || {};
+    content.innerHTML = `
+        <div class="px-6 pt-14 pb-6 bg-white border-b border-slate-50 sticky top-0 z-20">
+            <div class="flex items-center gap-4 mb-4"><button onclick="navigate('home')" class="w-10 h-10 bg-slate-50 rounded-full flex items-center justify-center text-slate-600 flex-shrink-0"><i data-lucide="arrow-left" class="w-5 h-5"></i></button><h2 class="text-2xl font-black text-slate-900 tracking-tight">Dashboard</h2></div>
+        </div>
+        <div class="p-6 space-y-6">
+            <div class="space-y-4">
+                <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Live Ops Feed</h4>
+                <div class="bg-white p-6 rounded-[2.5rem] border border-slate-100 flex items-center gap-4 shadow-sm">
+                    <div class="w-10 h-10 bg-emerald-50 text-emerald-500 rounded-xl flex items-center justify-center flex-shrink-0"><i data-lucide="check" style="width: 20px; height: 20px;"></i></div>
+                    <div class="min-w-0"><p class="text-xs font-bold text-slate-900">${latestLog.serviceLog_status || 'System Standby'}</p><p class="text-[10px] text-slate-400 font-medium">${latestLog.serviceLog_notes || 'Awaiting telemetry...'}</p></div>
                 </div>
-                <div class="p-6">
-                    ${state.detailTab === 'contacts' ? `
-                        ${state.contacts.map(c => `
-                            <div onclick="navigate('profile-hub', '${c.id}')" class="list-card">
-                                <img src="${c.image}" class="w-12 h-12 rounded-xl object-cover">
-                                <div class="flex-1">
-                                    <h4 class="font-bold text-slate-900 text-sm">${c.name}</h4>
-                                    <p class="text-[8px] font-black text-blue-600 uppercase mt-0.5">${c.roles.join(' / ')}</p>
-                                </div>
-                                <i data-lucide="chevron-right" class="text-slate-200 w-4 h-4"></i>
-                            </div>
-                        `).join('')}
-                    ` : `<div class="text-center py-12 text-slate-300 font-medium">Record items for this section will appear here.</div>`}
-                </div>
-            `;
-        }
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div class="bg-indigo-600 p-6 rounded-[2.5rem] text-white shadow-lg overflow-hidden"><p class="text-[8px] font-black uppercase tracking-widest opacity-60">Jobs</p><p class="text-3xl font-black mt-2">${state.serviceSchedules.length}</p></div>
+                <div class="bg-slate-900 p-6 rounded-[2.5rem] text-white shadow-lg overflow-hidden"><p class="text-[8px] font-black uppercase tracking-widest opacity-60">Staff</p><p class="text-3xl font-black mt-2">${state.staff.length}</p></div>
+            </div>
+        </div>
+    `;
+}
 
-        function renderProfileHub(content, contactId = null) {
-            const contact = state.contacts.find(c => c.id === contactId) || state.contacts[0];
-            content.innerHTML = `
-                <div class="px-6 pt-14 pb-6 bg-white border-b border-slate-50">
-                    <div class="flex items-center gap-4 mb-8">
-                        <button onclick="navigate('contacts')" class="w-10 h-10 bg-slate-50 rounded-full flex items-center justify-center text-slate-400"><i data-lucide="arrow-left" class="w-5 h-5"></i></button>
-                        <h2 class="text-lg font-black text-slate-900">Profile Hub</h2>
-                    </div>
-                    <div class="flex flex-col items-center mb-6">
-                        <img src="${contact.image}" class="w-24 h-24 rounded-3xl object-cover mb-3 shadow-xl">
-                        <h3 class="text-sm font-black text-slate-400 uppercase tracking-widest">${contact.email}</h3>
-                    </div>
-                    <div class="tab-container">
-                        <button onclick="setDetailTab('threads')" class="tab-btn ${state.detailTab === 'threads' ? 'active' : ''}">Threads</button>
-                        <button onclick="setDetailTab('messages')" class="tab-btn ${state.detailTab === 'messages' ? 'active' : ''}">Messages</button>
-                        <button onclick="setDetailTab('profile')" class="tab-btn ${state.detailTab === 'profile' || state.detailTab === 'overview' ? 'active' : ''}">Profile</button>
-                    </div>
-                </div>
-                <div class="p-6">
-                    ${state.detailTab === 'messages' ? `
-                        <div class="flex flex-col gap-4 mb-20">
-                            ${state.messages.map(m => `
-                                <div class="chat-bubble ${m.dir === 'left' ? 'chat-left' : 'chat-right'}">
-                                    ${m.text}
-                                    <div class="text-[8px] opacity-50 mt-1">${m.time}</div>
-                                </div>
-                            `).join('')}
-                        </div>
-                    ` : state.detailTab === 'threads' ? `
-                        <div class="space-y-4">
-                            ${state.calls.map(call => `
-                                <div class="bg-white p-5 rounded-3xl border border-slate-100">
-                                    <div class="flex justify-between items-start mb-2">
-                                        <span class="text-[9px] font-black text-blue-600 uppercase">${call.type}</span>
-                                        <span class="text-[9px] text-slate-400">${call.date}</span>
-                                    </div>
-                                    <p class="text-xs font-bold text-slate-700">${call.detail}</p>
-                                </div>
-                            `).join('')}
-                        </div>
-                    ` : `
-                        <div class="space-y-4">
-                            <div class="bg-white p-6 rounded-[2.5rem] border border-slate-100 flex items-center gap-5">
-                                <div class="w-12 h-12 bg-blue-50 text-blue-500 rounded-2xl flex items-center justify-center"><i data-lucide="smartphone" class="w-6 h-6"></i></div>
-                                <div class="flex-1"><span class="text-[8px] font-black text-slate-400 uppercase">Mobile</span><p class="text-base font-black text-slate-900">${contact.mobile}</p></div>
-                                <button class="w-10 h-10 bg-emerald-500 text-white rounded-2xl flex items-center justify-center"><i data-lucide="phone" class="w-4 h-4"></i></button>
-                            </div>
-                            <div class="bg-white p-6 rounded-[2.5rem] border border-slate-100 flex items-center gap-5">
-                                <div class="w-12 h-12 bg-indigo-50 text-indigo-500 rounded-2xl flex items-center justify-center"><i data-lucide="briefcase" class="w-6 h-6"></i></div>
-                                <div class="flex-1"><span class="text-[8px] font-black text-slate-400 uppercase">Work</span><p class="text-base font-black text-slate-900">${contact.work}</p></div>
-                            </div>
-                            <div class="bg-white p-6 rounded-[2rem] border border-slate-100">
-                                <h4 class="text-[9px] font-black text-slate-400 uppercase mb-2">Internal Notes</h4>
-                                <p class="text-xs text-slate-600 leading-relaxed font-medium">${contact.notes}</p>
-                            </div>
-                        </div>
-                    `}
-                </div>
-            `;
-        }
-
-        function renderCalendar(content) {
-            content.innerHTML = `
-                <div class="px-6 pt-14 pb-6 bg-white border-b border-slate-50">
-                    <h2 class="text-2xl font-black text-slate-900">Schedule</h2>
-                </div>
-                <div class="p-6 space-y-4">
-                    <div class="bg-white p-6 rounded-[2.5rem] border-l-4 border-l-indigo-500 border border-slate-100">
-                        <p class="text-[10px] font-black text-indigo-500 uppercase">10:00 AM - 11:30 AM</p>
-                        <h4 class="text-sm font-bold text-slate-900 mt-1">Site Inspection: West Side</h4>
-                        <p class="text-xs text-slate-400 mt-1">Dave Miller assigned</p>
-                    </div>
-                    <div class="bg-white p-6 rounded-[2.5rem] border-l-4 border-l-emerald-500 border border-slate-100">
-                        <p class="text-[10px] font-black text-emerald-500 uppercase">01:00 PM - 02:00 PM</p>
-                        <h4 class="text-sm font-bold text-slate-900 mt-1">Client Quarterly Review</h4>
-                        <p class="text-xs text-slate-400 mt-1">Riverside Construction HQ</p>
-                    </div>
-                </div>
-            `;
-        }
-
-        function renderStaff(content) {
-            content.innerHTML = `
-                <div class="px-6 pt-14 pb-6 bg-white border-b border-slate-50">
-                    <h2 class="text-2xl font-black text-slate-900">Staff Status</h2>
-                </div>
-                <div class="p-6 space-y-3">
-                    ${state.staff.map(s => `
-                        <div class="bg-white p-5 rounded-3xl border border-slate-100 flex items-center justify-between">
-                            <div>
-                                <h4 class="font-bold text-slate-900">${s.name}</h4>
-                                <p class="text-[10px] font-medium text-slate-400 uppercase">${s.role} • ${s.location}</p>
-                            </div>
-                            <span class="px-3 py-1 rounded-full text-[10px] font-black ${s.status === 'Onsite' ? 'bg-orange-50 text-orange-600' : 'bg-emerald-50 text-emerald-600'} uppercase">${s.status}</span>
-                        </div>
-                    `).join('')}
-                </div>
-            `;
-        }
-
-        function renderLogs(content) {
-            content.innerHTML = `
-                <div class="px-6 pt-14 pb-6 bg-white border-b border-slate-50">
-                    <h2 class="text-2xl font-black text-slate-900">System Logs</h2>
-                </div>
-                <div class="p-6">
-                    <div class="space-y-6">
-                        <div class="flex gap-4">
-                            <div class="w-1.5 bg-blue-500 rounded-full"></div>
-                            <div>
-                                <p class="text-[10px] font-black text-slate-400 uppercase">08:12 AM</p>
-                                <p class="text-sm font-bold text-slate-800">User Login: Admin Console</p>
-                            </div>
-                        </div>
-                        <div class="flex gap-4">
-                            <div class="w-1.5 bg-emerald-500 rounded-full"></div>
-                            <div>
-                                <p class="text-[10px] font-black text-slate-400 uppercase">07:45 AM</p>
-                                <p class="text-sm font-bold text-slate-800">Automated Report Sent to Riverside</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }
-
-        function renderComms(content) {
-            content.innerHTML = `
-                <div class="px-6 pt-14 pb-6 bg-white border-b border-slate-50">
-                    <h2 class="text-2xl font-black text-slate-900">Communications</h2>
-                </div>
-                <div class="p-6 space-y-3">
-                    ${state.contacts.map(c => `
-                        <div onclick="navigate('profile-hub', '${c.id}', 'detail'); setDetailTab('messages');" class="list-card">
-                            <img src="${c.image}" class="w-12 h-12 rounded-2xl object-cover">
-                            <div class="flex-1">
-                                <h4 class="font-bold text-slate-900">${c.name}</h4>
-                                <p class="text-xs text-slate-400 truncate">Last msg: 10:15 AM</p>
-                            </div>
-                            <div class="w-2 h-2 bg-blue-500 rounded-full"></div>
-                        </div>
-                    `).join('')}
-                </div>
-            `;
-        }
-
-        render();
-    </script>
+window.onload = () => { if (window.initSync) window.initSync(); render(); };
+</script>
 </body>
 </html>

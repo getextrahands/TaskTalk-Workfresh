@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WorkFresh Final DB Init</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #0f172a; color: #e2e8f0; font-family: system-ui, -apple-system, sans-serif; }
+        .card { background: #1e293b; border: 1px solid #334155; border-radius: 1rem; }
+        .status-dot { height: 8px; width: 8px; border-radius: 50%; display: inline-block; margin-right: 8px; }
+        .status-pending { background-color: #64748b; }
+        .status-success { background-color: #10b981; animation: pulse 2s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+    </style>
+</head>
+<body class="p-4 md:p-10 flex flex-col items-center min-h-screen">
+<div class="max-w-4xl w-full space-y-6">
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-white tracking-tight">WorkFresh Infrastructure</h1>
+            <p class="text-slate-400 text-sm">Full 17-Table Final Schema & Sample Data</p>
+        </div>
+        <div id="connectionStatus" class="text-xs font-mono bg-slate-800 px-3 py-1 rounded-full text-slate-400">
+            <span class="status-dot status-pending"></span> AUTH REQUIRED
+        </div>
+    </div>
+
+    <div class="card p-8 text-center space-y-6 shadow-xl">
+        <div class="space-y-2">
+            <h2 class="text-xl font-semibold text-blue-400">Database Provisioning Tool</h2>
+            <p class="text-slate-400 text-sm">Deploying all collections with every field from the 17-table master schema.</p>
+        </div>
+        <button id="execBtn" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl transition-all active:scale-[0.98] shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
+            DEPLOY ALL 17 TABLES
+        </button>
+
+        <div id="progressContainer" class="hidden space-y-4 text-left transition-all">
+            <div class="w-full bg-slate-700 h-2 rounded-full overflow-hidden">
+                <div id="progressBar" class="bg-blue-500 h-full w-0 duration-300"></div>
+            </div>
+            <div id="logBox" class="bg-black/50 rounded-lg p-4 h-64 overflow-y-auto font-mono text-[11px] text-slate-300 space-y-1 border border-slate-700">
+                <div>> Initializing deployment environment...</div>
+            </div>
+        </div>
+    </div>
+    <div id="colGrid" class="grid grid-cols-2 md:grid-cols-4 gap-2"></div>
+</div>
+
+<template id="colItem">
+    <div class="bg-slate-800/50 p-2 rounded border border-slate-700 text-[10px] font-mono text-slate-500 flex items-center">
+        <span class="check-icon mr-2">○</span>
+        <span class="name-text"></span>
+    </div>
+</template>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getFirestore, doc, setDoc, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyB-n1St2D0c5k66udqtrktzWWgYDtoBjIM",
+        authDomain: "tasktalk-professional.firebaseapp.com",
+        projectId: "tasktalk-professional",
+        storageBucket: "tasktalk-professional.firebasestorage.app",
+        messagingSenderId: "1038829850811",
+        appId: "1:1038829850811:web:14f1df9220253b2d87999e"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'workfresh-v2';
+
+    const MOCK_DATA = {
+        companies: {
+            id: "comp_001",
+            data: {
+                company_companyId: "comp_001",
+                company_companyName: "ABC Office Services",
+                company_companyStatus: "active",
+                company_phoneMain: "3015551111",
+                company_addressLine1: "100 Business Park Dr",
+                company_city: "Capitol Heights",
+                company_state: "MD",
+                company_zip: "20743",
+                company_accountHolderFirstName: "John",
+                company_accountHolderLastName: "Doe",
+                company_accountHolderFullName: "John Doe",
+                company_accountHolderEmail: "john@abc.com",
+                company_accountHolderPhone: "3015552222",
+                company_accountHolderRole: "owner",
+                company_accountHolderStatus: "active",
+                company_accountHolderNotes: "Primary account holder",
+                company_accountHolderImageUrl: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=200",
+                company_notes: "Commercial client",
+                company_logoUrl: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=200",
+                company_createdAt: "2026-01-01T10:00:00Z",
+                company_updatedAt: "2026-01-05T10:00:00Z"
+            }
+        },
+        facilities: {
+            id: "fac_001",
+            data: {
+                facility_facilityId: "fac_001",
+                facility_facilityName: "ABC Headquarters",
+                facility_facilityStatus: "active",
+                facility_facilityType: "officeBuilding",
+                facility_companyId: "comp_001",
+                facility_billingProfileId: "bill_001",
+                facility_addressLine1: "123 Main St",
+                facility_city: "Capitol Heights",
+                facility_state: "MD",
+                facility_zip: "20743",
+                facility_phone: "3015554444",
+                facility_location: { latitude: 38.8854, longitude: -76.9158 },
+                facility_notes: "Main office",
+                facility_imageUrl: "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?q=80&w=200",
+                facility_createdAt: "2026-01-10T08:00:00Z",
+                facility_updatedAt: "2026-01-10T09:00:00Z"
+            }
+        },
+        facilityContacts: {
+            id: "fc_001",
+            data: {
+                facilityContact_facilityId: "fac_001",
+                facilityContact_facilityContactId: "fc_001",
+                facilityContact_firstName: "Lisa",
+                facilityContact_lastName: "Smith",
+                facilityContact_fullName: "Lisa Smith",
+                facilityContact_email: "lisa@abc.com",
+                facilityContact_phone: "3015553333",
+                facilityContact_type: "primary",
+                facilityContact_status: "active",
+                facilityContact_isPrimary: true,
+                facilityContact_notes: "Main facility contact",
+                facilityContact_imageUrl: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=200",
+                facilityContact_createdAt: "2026-01-10T09:00:00Z",
+                facilityContact_updatedAt: "2026-01-10T09:00:00Z"
+            }
+        },
+        billingProfiles: {
+            id: "bill_001",
+            data: {
+                billingProfile_billingProfileId: "bill_001",
+                billingProfile_facilityId: "fac_001",
+                billingProfile_name: "ABC Billing Dept",
+                billingProfile_email: "billing@abc.com",
+                billingProfile_phone: "3015555555",
+                billingProfile_addressLine1: "123 Main St",
+                billingProfile_city: "Capitol Heights",
+                billingProfile_state: "MD",
+                billingProfile_zip: "20743",
+                billingProfile_status: "active",
+                billingProfile_notes: "Net 30 billing terms",
+                billingProfile_createdAt: "2026-01-10T08:30:00Z",
+                billingProfile_updatedAt: "2026-01-11T08:30:00Z"
+            }
+        },
+        staff: {
+            id: "staff_001",
+            data: {
+                staff_staffId: "staff_001",
+                staff_firstName: "Mike",
+                staff_lastName: "Brown",
+                staff_fullName: "Mike Brown",
+                staff_role: "cleaner",
+                staff_status: "active",
+                staff_phone: "3015556666",
+                staff_email: "mike@workfresh.team",
+                staff_notes: "Night cleaning crew leader",
+                staff_imageUrl: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=200",
+                staff_createdAt: "2026-01-01T06:00:00Z",
+                staff_updatedAt: "2026-01-02T06:00:00Z"
+            }
+        },
+        sow: {
+            id: "sow_001",
+            data: {
+                sow_sowId: "sow_001",
+                sow_facilityId: "fac_001",
+                sow_name: "Standard Cleaning Contract",
+                sow_status: "active",
+                sow_versionNumber: 1,
+                sow_effectiveDate: "2026-01-15T00:00:00Z",
+                sow_expirationDate: "2027-01-15T00:00:00Z",
+                sow_notes: "Daily janitorial work",
+                sow_createdAt: "2026-01-15T08:00:00Z",
+                sow_updatedAt: "2026-01-15T08:00:00Z"
+            }
+        },
+        sowTasks: {
+            id: "sowtask_001",
+            data: {
+                sowTask_sowTaskId: "sowtask_001",
+                sowTask_sowId: "sow_001",
+                sowTask_facilityId: "fac_001",
+                sowTask_name: "Clean Restrooms",
+                sowTask_description: "Disinfect and sanitize all surfaces",
+                sowTask_category: "restroom",
+                sowTask_area: "restroom",
+                sowTask_frequency: "daily",
+                sowTask_estimatedMinutes: 30,
+                sowTask_required: true,
+                sowTask_displayOrder: 1,
+                sowTask_notes: "Focus on touch points",
+                sowTask_createdAt: "2026-01-15T09:00:00Z",
+                sowTask_updatedAt: "2026-01-15T09:00:00Z"
+            }
+        },
+        serviceSchedules: {
+            id: "sched_001",
+            data: {
+                serviceSchedule_scheduleId: "sched_001",
+                serviceSchedule_facilityId: "fac_001",
+                serviceSchedule_sowId: "sow_001",
+                serviceSchedule_status: "active",
+                serviceSchedule_type: "recurring",
+                serviceSchedule_frequency: "daily",
+                serviceSchedule_nextServiceDate: "2026-02-01T18:00:00Z",
+                serviceSchedule_assignedStaffId: "staff_001",
+                serviceSchedule_notes: "Night service",
+                serviceSchedule_createdAt: "2026-01-20T08:00:00Z"
+            }
+        },
+        serviceLogs: {
+            id: "log_001",
+            data: {
+                serviceLog_serviceLogId: "log_001",
+                serviceLog_facilityId: "fac_001",
+                serviceLog_scheduleId: "sched_001",
+                serviceLog_sowId: "sow_001",
+                serviceLog_technicianStaffId: "staff_001",
+                serviceLog_status: "completed",
+                serviceLog_date: "2026-02-01T18:30:00Z",
+                serviceLog_notes: "All tasks completed successfully",
+                serviceLog_imageUrl: "https://images.unsplash.com/photo-1581578731522-745d05ad9a2d?q=80&w=200",
+                serviceLog_createdAt: "2026-02-01T21:00:00Z"
+            }
+        },
+        serviceTasks: {
+            id: "servtask_001",
+            data: {
+                serviceTask_serviceTaskId: "servtask_001",
+                serviceTask_serviceLogId: "log_001",
+                serviceTask_sowTaskId: "sowtask_001",
+                serviceTask_facilityId: "fac_001",
+                serviceTask_name: "Clean Restrooms",
+                serviceTask_status: "completed",
+                serviceTask_completedByStaffId: "staff_001",
+                serviceTask_completedAt: "2026-02-01T19:00:00Z",
+                serviceTask_notes: "Completed successfully",
+                serviceTask_createdAt: "2026-02-01T21:00:00Z"
+            }
+        },
+        tasks: {
+            id: "task_001",
+            data: {
+                task_taskId: "task_001",
+                task_facilityId: "fac_001",
+                task_serviceLogId: "log_001",
+                task_title: "Refill Soap",
+                task_description: "Restrooms low on soap",
+                task_status: "pending",
+                task_priority: "medium",
+                task_assignedStaffId: "staff_001",
+                task_notes: "Need refill in front restrooms",
+                task_imageUrl: "",
+                task_createdAt: "2026-02-01T21:30:00Z"
+            }
+        },
+        taskUpdates: {
+            id: "tu_001",
+            data: {
+                taskUpdate_taskUpdateId: "tu_001",
+                taskUpdate_taskId: "task_001",
+                taskUpdate_type: "created",
+                taskUpdate_note: "Task logged",
+                taskUpdate_changedByStaffId: "staff_001",
+                taskUpdate_createdAt: "2026-02-01T21:35:00Z"
+            }
+        },
+        issues: {
+            id: "issue_001",
+            data: {
+                issue_issueId: "issue_001",
+                issue_facilityId: "fac_001",
+                issue_type: "service",
+                issue_status: "open",
+                issue_severity: "medium",
+                issue_title: "Missed Trash",
+                issue_description: "Trash was not removed in breakroom",
+                issue_reportedByFacilityContactId: "fc_001",
+                issue_reportedByStaffId: "",
+                issue_notes: "Reported via mobile app",
+                issue_imageUrl: "",
+                issue_createdAt: "2026-02-02T09:00:00Z"
+            }
+        },
+        issueUpdates: {
+            id: "iu_001",
+            data: {
+                issueUpdate_issueUpdateId: "iu_001",
+                issueUpdate_issueId: "issue_001",
+                issueUpdate_type: "created",
+                issueUpdate_note: "Issue logged",
+                issueUpdate_changedByStaffId: "staff_001",
+                issueUpdate_createdAt: "2026-02-02T09:10:00Z"
+            }
+        },
+        messages: {
+            id: "msg_001",
+            data: {
+                message_messageId: "msg_001",
+                message_facilityId: "fac_001",
+                message_facilityContactId: "fc_001",
+                message_staffId: "staff_001",
+                message_type: "sms",
+                message_phoneNumber: "3015553333",
+                message_direction: "outbound",
+                message_text: "Issue being addressed immediately",
+                message_status: "sent",
+                message_notes: "Sent to client contact",
+                message_createdAt: "2026-02-02T10:00:00Z"
+            }
+        },
+        callLogs: {
+            id: "call_001",
+            data: {
+                callLog_callLogId: "call_001",
+                callLog_facilityId: "fac_001",
+                callLog_facilityContactId: "fc_001",
+                callLog_staffId: "staff_001",
+                callLog_phoneNumber: "3015553333",
+                callLog_direction: "outbound",
+                callLog_type: "voice",
+                callLog_duration: 300,
+                callLog_status: "completed",
+                callLog_recordingUrl: "",
+                callLog_notes: "Discussed missed trash issue with Lisa",
+                callLog_createdAt: "2026-02-02T10:30:00Z"
+            }
+        },
+        documents: {
+            id: "doc_001",
+            data: {
+                document_documentId: "doc_001",
+                document_documentName: "Front Lobby Before Cleaning",
+                document_fileName: "IMG_2394.png",
+                document_relatedType: "facility",
+                document_relatedId: "fac_001",
+                document_type: "image",
+                document_category: "facilityImage",
+                document_fileUrl: "https://images.unsplash.com/photo-1584622650111-993a426fbf0a?q=80&w=200",
+                document_uploadedByStaffId: "staff_001",
+                document_notes: "Before service photo",
+                document_createdAt: "2026-02-01T08:00:00Z"
+            }
+        }
+    };
+
+    const COLLECTIONS = Object.keys(MOCK_DATA);
+    const execBtn = document.getElementById('execBtn');
+    const logBox = document.getElementById('logBox');
+    const progressBar = document.getElementById('progressBar');
+    const progressContainer = document.getElementById('progressContainer');
+    const colGrid = document.getElementById('colGrid');
+    const template = document.getElementById('colItem');
+
+    COLLECTIONS.forEach(col => {
+        const clone = template.content.cloneNode(true);
+        clone.querySelector('.name-text').textContent = col.toUpperCase();
+        clone.querySelector('div').id = `status-${col}`;
+        colGrid.appendChild(clone);
+    });
+
+    function log(msg, type = 'info') {
+        const div = document.createElement('div');
+        div.className = type === 'error' ? 'text-red-400' : type === 'success' ? 'text-emerald-400' : 'text-blue-400';
+        div.textContent = `> ${msg}`;
+        logBox.appendChild(div);
+        logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    async function initAuth() {
+        try {
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                await signInWithCustomToken(auth, __initial_auth_token);
+            } else {
+                await signInAnonymously(auth);
+            }
+        } catch (e) { log("Auth Error: " + e.message, "error"); }
+    }
+
+    onAuthStateChanged(auth, (user) => {
+        if (user) {
+            const indicator = document.getElementById('connectionStatus');
+            indicator.innerHTML = `<span class="status-dot status-success"></span> CONNECTED`;
+            indicator.classList.replace('text-slate-400', 'text-emerald-400');
+        }
+    });
+
+    execBtn.addEventListener('click', async () => {
+        execBtn.disabled = true;
+        progressContainer.classList.remove('hidden');
+        log("DEPLOYING MASTER SCHEMA (17 COLLECTIONS)...");
+        try {
+            let count = 0;
+            for (const col of COLLECTIONS) {
+                const record = MOCK_DATA[col];
+                log(`Processing Table: ${col.toUpperCase()}...`);
+                // RULE 1 Path: artifacts/{appId}/public/data/{collectionName}/{documentId}
+                const ref = doc(db, 'artifacts', appId, 'public', 'data', col, record.id);
+                await setDoc(ref, record.data);
+                count++;
+                
+                progressBar.style.width = `${Math.round((count / COLLECTIONS.length) * 100)}%`;
+                const el = document.getElementById(`status-${col}`);
+                if (el) {
+                    el.classList.replace('text-slate-500', 'text-emerald-400');
+                    el.querySelector('.check-icon').textContent = '✓';
+                }
+                await new Promise(r => setTimeout(r, 150));
+            }
+            log("ALL 17 TABLES PROVISIONED SUCCESSFULLY.", "success");
+            execBtn.innerText = "DEPLOYMENT COMPLETE";
+            execBtn.classList.replace('bg-blue-600', 'bg-emerald-600');
+        } catch (err) {
+            log("FATAL ERROR: " + err.message, "error");
+            execBtn.disabled = false;
+        }
+    });
+
+    initAuth();
+</script>
+</body>
+</html>
